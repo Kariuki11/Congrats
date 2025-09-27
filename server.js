@@ -1,15 +1,19 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const { config, validateConfig } = require('./config');
+const websocketService = require('./services/websocketService');
 
 const twilioRoutes = require('./routes/twilio');
 const conversationRoutes = require('./routes/conversations');
 const uploadRoutes = require('./routes/upload');
+const websocketRoutes = require('./routes/websocket');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = config.server.port;
 
 // Security middleware
@@ -37,6 +41,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/twilio', twilioRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/websocket', websocketRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -50,13 +55,33 @@ app.get('/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'WhatsApp Backend Service',
+    message: 'WhatsApp Backend Service with WebSocket Support',
     version: '1.0.0',
+    features: {
+      whatsapp: 'Twilio integration',
+      websocket: 'Real-time communication',
+      conversations: 'Message management',
+      uploads: 'File handling'
+    },
     endpoints: {
       webhook: '/twilio/webhook',
       conversations: '/api/conversations',
       upload: '/api/upload',
+      websocket: '/api/websocket',
       health: '/health'
+    },
+    websocket: {
+      enabled: true,
+      events: [
+        'message',
+        'conversation_update',
+        'user_update',
+        'system_notification',
+        'conversation_takeover',
+        'ai_status_change',
+        'typing_start',
+        'typing_stop'
+      ]
     }
   });
 });
@@ -81,12 +106,16 @@ app.use('*', (req, res) => {
 // Validate configuration
 validateConfig();
 
+// Initialize WebSocket service
+websocketService.initialize(server);
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`WhatsApp Backend Server running on port ${PORT}`);
-//   console.log(`Webhook URL: http://localhost:${PORT}/twilio/webhook`);
-//   console.log(`Health check: http://localhost:${PORT}/health`);
-//   console.log(`Environment: ${config.server.nodeEnv}`);
+  console.log(`WebSocket server initialized`);
+  console.log(`Webhook URL: http://localhost:${PORT}/twilio/webhook`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Environment: ${config.server.nodeEnv}`);
 });
 
-module.exports = app;
+module.exports = { app, server };

@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const websocketService = require('./websocketService');
 
 // In-memory storage for development
 // This will be replaced with Supabase database later
@@ -31,6 +32,19 @@ class MessageService {
     // Update conversation
     await this.updateConversation(conversationId, message);
 
+    // Broadcast new message to WebSocket clients
+    websocketService.broadcastNewMessage({
+      messageId,
+      conversationId,
+      from: message.from,
+      to: message.to,
+      body: message.body,
+      direction: message.direction,
+      timestamp: message.timestamp,
+      mediaCount: message.mediaCount,
+      mediaFiles: message.mediaFiles
+    });
+
     console.log(`Message stored: ${messageId} in conversation: ${conversationId}`);
     return message;
   }
@@ -61,6 +75,16 @@ class MessageService {
       if (message.direction === 'inbound') {
         existing.unreadCount += 1;
       }
+
+      // Broadcast conversation update
+      websocketService.broadcastConversationUpdate({
+        conversationId,
+        lastMessage: existing.lastMessage,
+        lastMessageAt: existing.lastMessageAt,
+        messageCount: existing.messageCount,
+        unreadCount: existing.unreadCount,
+        status: existing.status
+      });
     } else {
       // Create new conversation
       const conversation = {
@@ -78,6 +102,18 @@ class MessageService {
       };
       
       conversations.set(conversationId, conversation);
+
+      // Broadcast new conversation to staff dashboard
+      websocketService.broadcastConversationUpdate({
+        conversationId,
+        lastMessage: conversation.lastMessage,
+        lastMessageAt: conversation.lastMessageAt,
+        messageCount: conversation.messageCount,
+        unreadCount: conversation.unreadCount,
+        status: conversation.status,
+        participantPhone: conversation.participantPhone,
+        isNew: true
+      });
     }
   }
 
